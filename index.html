@@ -7,64 +7,104 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a1a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
-        .header { background: #2d2d2d; padding: 15px; text-align: center; border-bottom: 2px solid #4CAF50; }
-        .header h1 { color: #4CAF50; font-size: 1.5rem; }
-        .status-bar { background: #252525; padding: 10px; text-align: center; font-size: 0.85rem; }
-        .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
-        .status-waiting { background: #ffc107; }
-        .status-connected { background: #4caf50; }
-        .status-disconnected { background: #f44336; }
-        .container { flex: 1; max-width: 600px; margin: 0 auto; width: 100%; padding: 20px; }
-        .welcome-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
-        .btn { background: #4CAF50; color: #fff; border: none; padding: 15px 40px; font-size: 1rem; cursor: pointer; border-radius: 5px; transition: all 0.3s; }
-        .btn:hover { background: #45a049; }
-        .btn-secondary { background: #3d3d3d; }
-        .btn-secondary:hover { background: #4d4d4d; }
-        .btn-file { background: #2196F3; color: #fff; border: none; padding: 8px 16px; font-size: 0.9rem; cursor: pointer; border-radius: 20px; }
-        .btn-file:hover { background: #1976D2; }
-        .btn-download { background: #ff9800; color: #fff; border: none; padding: 8px 16px; font-size: 0.9rem; cursor: pointer; border-radius: 5px; }
-        .btn-download:hover { background: #f57c00; }
-        .btn-download:disabled { background: #666; cursor: not-allowed; }
-        .input-code { padding: 12px 15px; font-size: 1rem; border: 2px solid #3d3d3d; border-radius: 5px; background: #252525; color: #fff; text-align: center; }
-        .invite-code-display { font-size: 2rem; font-weight: bold; color: #4CAF50; letter-spacing: 5px; }
-        .chat-screen { display: none; flex-direction: column; height: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117; color: #c9d1d9;
+            height: 100dvh; display: flex; flex-direction: column;
+            overflow: hidden; -webkit-tap-highlight-color: transparent;
+        }
+        .header { background: #161b22; padding: 12px 16px; text-align: center; border-bottom: 1px solid #30363d; flex-shrink: 0; }
+        .header h1 { font-size: 1.1rem; font-weight: 600; color: #58a6ff; letter-spacing: 1px; }
+        .status-bar { background: #161b22; padding: 6px; text-align: center; font-size: 0.75rem; color: #8b949e; flex-shrink: 0; border-bottom: 1px solid #21262d; }
+        .status-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .status-waiting { background: #d2991d; }
+        .status-connected { background: #3fb950; }
+        .status-disconnected { background: #f85149; }
+        .container { flex: 1; max-width: 600px; margin: 0 auto; width: 100%; overflow: hidden; display: flex; flex-direction: column; }
+        .welcome-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px; padding: 20px; }
+        .welcome-screen label { font-size: 0.85rem; color: #8b949e; }
+        .btn {
+            border: 1px solid #30363d; padding: 12px 32px; font-size: 0.95rem;
+            cursor: pointer; border-radius: 8px; transition: all .2s; font-family: inherit;
+            font-weight: 500; background: #21262d; color: #c9d1d9;
+        }
+        .btn:active { transform: scale(.97); opacity: .8; }
+        .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+        .btn-primary:active { background: #2ea043; }
+        .btn-file { background: #1f6feb; border-color: #388bfd; color: #fff; padding: 8px 14px; font-size: 0.85rem; border-radius: 20px; }
+        .btn-download { background: #d2991d; border-color: #d2991d; color: #000; padding: 6px 14px; font-size: 0.8rem; border-radius: 6px; }
+        .btn-download:disabled { opacity: .4; cursor: not-allowed; }
+        .input-code {
+            padding: 10px 14px; font-size: 0.95rem; border: 1px solid #30363d;
+            border-radius: 8px; background: #0d1117; color: #c9d1d9; text-align: center;
+            outline: none; font-family: inherit;
+        }
+        .input-code:focus { border-color: #58a6ff; }
+        .invite-code-display { font-size: 2rem; font-weight: 700; color: #58a6ff; letter-spacing: 6px; font-family: monospace; }
+        .chat-screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
         .chat-screen.active { display: flex; }
-        .chat-header { display: flex; justify-content: space-between; padding: 10px; background: #2d2d2d; margin-bottom: 10px; }
-        .messages { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-        .message { padding: 12px 16px; border-radius: 15px; max-width: 70%; word-break: break-word; }
-        .message.sent { background: #4CAF50; color: #fff; align-self: flex-end; }
-        .message.received { background: #2196F3; color: #fff; align-self: flex-start; }
-        .message.file-message { background: #333; padding: 15px; max-width: 80%; }
-        .message-time { font-size: 0.7rem; opacity: 0.7; margin-top: 5px; }
-        .input-area { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
-        .message-input { flex: 1; padding: 12px; border: 2px solid #3d3d3d; border-radius: 20px; background: #252525; color: #fff; resize: none; }
-        .send-btn { padding: 12px 24px; background: #4CAF50; color: #fff; border: none; border-radius: 20px; cursor: pointer; }
-        .hint { text-align: center; color: #888; font-size: 0.85rem; margin-top: 15px; }
-        .disconnected-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); flex-direction: column; justify-content: center; align-items: center; }
+        .chat-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; background: #161b22; border-bottom: 1px solid #21262d;
+            flex-shrink: 0; font-size: 0.85rem;
+        }
+        .chat-header .code-label { color: #58a6ff; font-weight: 600; }
+        .messages {
+            flex: 1; overflow-y: auto; padding: 12px; display: flex;
+            flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch;
+        }
+        .message { padding: 10px 14px; border-radius: 16px; max-width: 75%; word-break: break-word; font-size: 0.9rem; line-height: 1.45; }
+        .message.sent { background: #238636; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .message.received { background: #21262d; color: #c9d1d9; align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #30363d; }
+        .message.file-message { background: #161b22; border: 1px solid #30363d; padding: 12px; max-width: 80%; }
+        .message.voice-message { background: #21262d; border: 1px solid #30363d; }
+        .message-time { font-size: 0.65rem; opacity: 0.6; margin-top: 4px; }
+        .message-sender { font-size: 0.7rem; opacity: 0.6; margin-bottom: 3px; }
+        .input-area {
+            display: flex; gap: 6px; padding: 10px 12px; align-items: flex-end;
+            background: #161b22; border-top: 1px solid #21262d; flex-shrink: 0;
+        }
+        .message-input {
+            flex: 1; padding: 10px 14px; border: 1px solid #30363d; border-radius: 20px;
+            background: #0d1117; color: #c9d1d9; resize: none; font-size: 0.9rem;
+            outline: none; font-family: inherit; max-height: 100px; line-height: 1.4;
+        }
+        .message-input:focus { border-color: #58a6ff; }
+        .icon-btn {
+            width: 40px; height: 40px; border-radius: 50%; border: 1px solid #30363d;
+            background: #21262d; color: #c9d1d9; font-size: 1.1rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: all .15s;
+        }
+        .icon-btn:active { background: #30363d; transform: scale(.92); }
+        .icon-btn.send { background: #238636; border-color: #2ea043; color: #fff; }
+        .icon-btn.recording { background: #f85149; border-color: #f85149; color: #fff; animation: pulse .7s infinite; }
+        @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(248,81,73,.5); } 50% { box-shadow: 0 0 0 10px rgba(248,81,73,0); } }
+        .hint { text-align: center; color: #8b949e; font-size: 0.75rem; padding: 6px; flex-shrink: 0; }
+        .disconnected-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.92); flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
         .disconnected-overlay.active { display: flex; }
-        .disconnected-overlay h2 { color: #f44336; font-size: 1.5rem; margin-bottom: 10px; }
-        .disconnected-overlay p { color: #888; margin-bottom: 20px; }
-        
-        /* 文件消息样式 */
-        .file-info { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .file-icon { font-size: 2rem; }
+        .disconnected-overlay h2 { color: #f85149; font-size: 1.3rem; margin-bottom: 8px; }
+        .disconnected-overlay p { color: #8b949e; margin-bottom: 16px; font-size: 0.85rem; }
+        .file-info { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .file-icon { font-size: 1.6rem; }
         .file-details { flex: 1; }
-        .file-name { font-weight: bold; margin-bottom: 3px; }
-        .file-size { font-size: 0.8rem; opacity: 0.8; }
-        .file-timer { font-size: 0.85rem; color: #ffc107; margin: 8px 0; }
-        .file-status { font-size: 0.8rem; margin-top: 5px; }
-        .file-status.expired { color: #f44336; }
-        .file-status.downloaded { color: #4caf50; }
-        
-        /* 文件预览区 */
-        .file-preview { display: none; background: #2d2d2d; padding: 10px; border-radius: 10px; margin-bottom: 10px; }
-        .file-preview.active { display: flex; align-items: center; gap: 10px; }
-        .file-preview-name { flex: 1; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .file-preview-remove { background: #f44336; color: #fff; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-        .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-        .toast { background: #333; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 0.85rem; animation: toastIn 0.3s ease; pointer-events: auto; white-space: nowrap; }
-        @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .file-name { font-weight: 600; margin-bottom: 2px; font-size: 0.85rem; }
+        .file-size { font-size: 0.75rem; opacity: 0.7; }
+        .file-timer { font-size: 0.78rem; color: #d2991d; margin: 6px 0; }
+        .file-status { font-size: 0.75rem; margin-top: 4px; }
+        .file-status.expired { color: #f85149; }
+        .file-status.downloaded { color: #3fb950; }
+        .file-preview { display: none; background: #161b22; border: 1px solid #30363d; padding: 8px 12px; border-radius: 10px; margin: 0 12px 4px; align-items: center; gap: 10px; }
+        .file-preview.active { display: flex; }
+        .file-preview-name { flex: 1; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-preview-remove { background: #f85149; color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+        .voice-bubble { display: flex; align-items: center; gap: 8px; }
+        .voice-play { width: 32px; height: 32px; border-radius: 50%; border: none; background: #238636; color: #fff; cursor: pointer; font-size: 0.8rem; flex-shrink: 0; }
+        .voice-play.played { background: #30363d; pointer-events: none; }
+        .voice-meta { font-size: 0.75rem; color: #8b949e; }
+        .toast-container { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 999; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+        .toast { background: #30363d; color: #e6edf3; padding: 8px 18px; border-radius: 16px; font-size: 0.8rem; animation: toastIn .25s ease; pointer-events: auto; white-space: nowrap; border: 1px solid #484f58; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -83,15 +123,15 @@
                 <p style="margin-top:20px;margin-bottom:10px;">设置消息焚毁时间（秒）：</p>
                 <input type="number" class="input-code" id="burnTimeInput" value="8" min="3" max="60" style="width:100px;">
                 <div style="margin-top:20px;display:flex;gap:10px;">
-                    <button class="btn" id="createBtn">创建房间</button>
-                    <button class="btn btn-secondary" id="joinBtn">输入邀请码</button>
+                    <button class="btn btn-primary" id="createBtn">创建房间</button>
+                    <button class="btn" id="joinBtn">输入邀请码</button>
                 </div>
             </div>
             <div id="inviteSection" style="display:none;">
                 <p>分享此邀请码：</p>
                 <div style="display:flex;align-items:center;gap:10px;margin:20px 0;">
                     <div class="invite-code-display" id="inviteCode">------</div>
-                    <button class="btn btn-secondary" id="copyBtn" style="padding:8px 15px;">复制</button>
+                    <button class="btn" id="copyBtn" style="padding:8px 15px;">复制</button>
                 </div>
                 <p>等待对方加入...</p>
             </div>
@@ -99,9 +139,9 @@
                 <p>输入邀请码：</p>
                 <div style="display:flex;gap:10px;margin:20px 0;">
                     <input type="text" class="input-code" id="codeInput" maxlength="6" placeholder="______" style="width:150px;">
-                    <button class="btn" id="joinRoomBtn">加入</button>
+                    <button class="btn btn-primary" id="joinRoomBtn">加入</button>
                 </div>
-                <button class="btn btn-secondary" id="backBtn">返回</button>
+                <button class="btn" id="backBtn">返回</button>
             </div>
         </div>
         <div class="chat-screen" id="chatScreen">
@@ -116,9 +156,10 @@
             </div>
             <div class="input-area">
                 <input type="file" id="fileInput" style="display:none;" multiple>
-                <button class="btn-file" id="fileBtn">📎</button>
+                <button class="icon-btn" id="fileBtn" title="发送文件">📎</button>
+                <button class="icon-btn" id="voiceBtn" title="按住录音">🎤</button>
                 <textarea class="message-input" id="messageInput" rows="1" placeholder="输入消息..."></textarea>
-                <button class="send-btn" id="sendBtn">发送</button>
+                <button class="icon-btn send" id="sendBtn" title="发送">↑</button>
             </div>
             <p class="hint">消息将在 <span id="displayBurnTime">8</span> 秒后自动焚毁</p>
         </div>
@@ -138,7 +179,11 @@
         let userName = '匿名';
         let burnTime = 8;
         let fileDownloadExpiry = 60; // 文件下载有效期（秒）
-        let pendingFile = null; // 待发送的文件
+        let pendingFile = null;
+        let voiceRecorder = null;
+        let voiceChunks = [];
+        let voiceStream = null;
+        let isRecording = false;
 
         function toast(msg) {
             const c = document.getElementById('toastContainer');
@@ -275,6 +320,8 @@
                         showMessage(data.content, data.name, data.id, false);
                     } else if (data.type === 'file') {
                         receiveFile(data);
+                    } else if (data.type === 'voice') {
+                        showVoiceMessage(data, data.id, false);
                     } else if (data.type === 'burn') {
                         burnMessage(data.id);
                     }
@@ -655,6 +702,91 @@
             document.getElementById('messageInput').value = '';
         }
 
+        // ===== 语音消息 =====
+        async function startVoiceRecord() {
+            if (!conn || !conn.open) { toast('请先建立连接'); return; }
+            try {
+                voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+                voiceRecorder = new MediaRecorder(voiceStream, { mimeType: mime });
+                voiceChunks = [];
+                voiceRecorder.ondataavailable = e => { if (e.data.size > 0) voiceChunks.push(e.data); };
+                voiceRecorder.start();
+                isRecording = true;
+                document.getElementById('voiceBtn').classList.add('recording');
+                document.getElementById('voiceBtn').textContent = '⬤';
+            } catch(e) {
+                toast('无法访问麦克风');
+                isRecording = false;
+            }
+        }
+
+        async function stopVoiceRecord() {
+            if (!isRecording || !voiceRecorder) return;
+            isRecording = false;
+            document.getElementById('voiceBtn').classList.remove('recording');
+            document.getElementById('voiceBtn').textContent = '🎤';
+            const btn = document.getElementById('voiceBtn');
+            return new Promise(resolve => {
+                voiceRecorder.onstop = async () => {
+                    if (voiceStream) { voiceStream.getTracks().forEach(t => t.stop()); voiceStream = null; }
+                    const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType });
+                    voiceRecorder = null; voiceChunks = [];
+                    resolve(blob);
+                };
+                voiceRecorder.stop();
+            });
+        }
+
+        function sendVoice(blob) {
+            if (!blob || blob.size < 100) return;
+            const reader = new FileReader();
+            reader.onload = function() {
+                const msgId = crypto.randomUUID();
+                const duration = Math.round(blob.size / 3200); // 粗略估算时长
+                const voiceData = {
+                    type: 'voice', id: msgId, name: userName,
+                    data: reader.result, duration: Math.min(duration, 60),
+                    mime: blob.type, timestamp: Date.now()
+                };
+                showVoiceMessage(voiceData, msgId, true);
+                conn.send(voiceData);
+            };
+            reader.readAsDataURL(blob);
+        }
+
+        function showVoiceMessage(data, msgId, isSent) {
+            const el = document.createElement('div');
+            el.className = 'message ' + (isSent ? 'sent' : 'received') + ' voice-message';
+            el.dataset.id = msgId;
+            el.innerHTML = `
+                <div class="message-sender">${data.name}</div>
+                <div class="voice-bubble">
+                    <button class="voice-play" data-voice-id="${msgId}">▶</button>
+                    <span class="voice-meta">🎤 ${data.duration || '?'}″</span>
+                </div>
+                <div class="message-time">${new Date(data.timestamp).toLocaleTimeString()}</div>
+            `;
+            document.getElementById('messages').appendChild(el);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            setupVoicePlay(el, data.data, data.mime);
+            if (!isSent) playNotificationSound();
+            setTimeout(() => burnMessage(msgId), burnTime * 1000);
+        }
+
+        function setupVoicePlay(el, dataUrl, mime) {
+            const btn = el.querySelector('.voice-play');
+            if (!btn) return;
+            const audio = new Audio(dataUrl);
+            btn.addEventListener('click', () => {
+                if (btn.classList.contains('played')) return;
+                btn.classList.add('played');
+                btn.textContent = '⏸';
+                audio.play().catch(() => {});
+                audio.onended = () => { btn.textContent = '✓'; };
+            });
+        }
+
         function playNotificationSound() {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioContext.createOscillator();
@@ -713,6 +845,17 @@
             }
         });
         document.getElementById('reloadBtn').addEventListener('click', function() { location.reload(); });
+
+        // 语音按钮：按住录音，松开发送
+        const voiceBtn = document.getElementById('voiceBtn');
+        let voiceLongPress;
+
+        voiceBtn.addEventListener('mousedown', e => { e.preventDefault(); voiceLongPress = setTimeout(() => startVoiceRecord(), 200); });
+        voiceBtn.addEventListener('mouseup', async e => { e.preventDefault(); clearTimeout(voiceLongPress); const blob = await stopVoiceRecord(); if (blob) sendVoice(blob); });
+        voiceBtn.addEventListener('mouseleave', () => { clearTimeout(voiceLongPress); if (isRecording) { voiceRecorder.onstop = () => {}; voiceRecorder.stop(); if (voiceStream) { voiceStream.getTracks().forEach(t => t.stop()); voiceStream = null; } voiceRecorder = null; isRecording = false; document.getElementById('voiceBtn').classList.remove('recording'); document.getElementById('voiceBtn').textContent = '🎤'; } });
+        voiceBtn.addEventListener('touchstart', e => { e.preventDefault(); voiceLongPress = setTimeout(() => startVoiceRecord(), 200); });
+        voiceBtn.addEventListener('touchend', async e => { e.preventDefault(); clearTimeout(voiceLongPress); const blob = await stopVoiceRecord(); if (blob) sendVoice(blob); });
+        voiceBtn.addEventListener('touchcancel', () => { clearTimeout(voiceLongPress); if (isRecording) { voiceRecorder.onstop = () => {}; voiceRecorder.stop(); if (voiceStream) { voiceStream.getTracks().forEach(t => t.stop()); voiceStream = null; } voiceRecorder = null; isRecording = false; document.getElementById('voiceBtn').classList.remove('recording'); document.getElementById('voiceBtn').textContent = '🎤'; } });
 
         document.getElementById('messageInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
