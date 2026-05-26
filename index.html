@@ -184,6 +184,7 @@
         let voiceChunks = [];
         let voiceStream = null;
         let isRecording = false;
+        let voiceStartTime = 0;
 
         function toast(msg) {
             const c = document.getElementById('toastContainer');
@@ -365,19 +366,21 @@
             messageEl.dataset.fileId = fileData.fileId;
             messageEl.dataset.downloaded = 'false';
 
+            const isImage = fileData.isImage || /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(fileData.name);
+            const icon = isImage ? '🖼️' : getFileIcon(fileData.name);
             const timerText = isSent ? '文件已发送' : `⏱️ 下载有效期：${fileData.expiry}秒`;
 
             messageEl.innerHTML = `
                 <div class="file-info">
-                    <span class="file-icon">${getFileIcon(fileData.name)}</span>
+                    <span class="file-icon">${icon}</span>
                     <div class="file-details">
                         <div class="file-name">${fileData.name}</div>
-                        <div class="file-size">${formatFileSize(fileData.size)}</div>
+                        <div class="file-size">${formatFileSize(fileData.size)}${isImage ? ' · 图片' : ''}</div>
                     </div>
                 </div>
                 <div class="file-timer">${timerText}</div>
                 <button class="btn-download" data-file-id="${fileData.fileId}" ${isSent ? 'disabled style="background:#666;"' : ''}>
-                    ${isSent ? '已发送' : '下载文件'}
+                    ${isSent ? '已发送' : (isImage ? '查看/下载图片' : '下载文件')}
                 </button>
                 <div class="file-status" id="status-${fileData.fileId}"></div>
             `;
@@ -394,10 +397,6 @@
 
             if (!isSent) {
                 playNotificationSound();
-            }
-
-            // 启动文件过期倒计时
-            if (!isSent) {
                 startFileExpiryTimer(fileData.fileId, fileData.expiry, msgId);
             }
 
@@ -440,70 +439,51 @@
             }, 1000);
         }
 
-        // 发送文件
+        // 发送文件 — 整个文件读为 dataURL，再分块传输字符串
         function sendFile(file) {
-            if (!conn) {
-                toast('请先建立连接！');
-                return;
-            }
+            if (!conn) { toast('请先建立连接！'); return; }
 
             const fileId = 'file-' + crypto.randomUUID();
-            const fileData = {
-                type: 'file',
-                fileId: fileId,
-                name: file.name,
-                size: file.size,
-                expiry: fileDownloadExpiry,
-                totalChunks: Math.ceil(file.size / (64 * 1024)) // 每块64KB
-            };
+            const isImage = file.type.startsWith('image/');
 
-            // 显示发送的文件消息
-            showFileMessage(fileData, userName, fileData.fileId, true);
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const fullDataUrl = e.target.result;
+                const chunkSize = 14 * 1024; // 14KB 每块，安全适配 DataChannel
+                const totalChunks = Math.ceil(fullDataUrl.length / chunkSize);
 
-            // 分块发送文件
-            const chunkSize = 64 * 1024; // 64KB per chunk
-            let offset = 0;
-            let chunkIndex = 0;
-
-            function sendChunk() {
-                const chunk = file.slice(offset, offset + chunkSize);
-                const reader = new FileReader();
-
-                reader.onload = function(e) {
-                    const chunkData = {
-                        type: 'file-chunk',
-                        fileId: fileId,
-                        chunkIndex: chunkIndex,
-                        totalChunks: fileData.totalChunks,
-                        data: e.target.result
-                    };
-
-                    conn.send(chunkData);
-
-                    offset += chunkSize;
-                    chunkIndex++;
-
-                    if (offset < file.size) {
-                        // 继续发送下一块
-                        setTimeout(sendChunk, 10);
-                    } else {
-                        // 文件发送完成
-                        const msgEl = document.querySelector('[data-id="' + fileId + '"]');
-                        if (msgEl) {
-                            const statusEl = document.getElementById('status-' + fileId);
-                            statusEl.textContent = '已发送完毕';
-                            statusEl.className = 'file-status downloaded';
-                        }
-                    }
+                const fileData = {
+                    type: 'file', fileId: fileId, name: file.name,
+                    size: file.size, expiry: fileDownloadExpiry,
+                    totalChunks: totalChunks, mime: file.type, isImage: isImage
                 };
 
-                reader.readAsDataURL(chunk);
-            }
+                showFileMessage(fileData, userName, fileId, true);
 
-            // 先发送文件元数据
-            conn.send(fileData);
-            // 开始发送文件内容
-            sendChunk();
+                // 发送元数据
+                conn.send(fileData);
+
+                // 发送所有分块
+                for (let i = 0; i < totalChunks; i++) {
+                    conn.send({
+                        type: 'file-chunk', fileId: fileId,
+                        chunkIndex: i, totalChunks: totalChunks,
+                        data: fullDataUrl.substring(i * chunkSize, (i + 1) * chunkSize)
+                    });
+                }
+
+                // 更新发送状态
+                setTimeout(() => {
+                    const statusEl = document.getElementById('status-' + fileId);
+                    if (statusEl) { statusEl.textContent = '已发送完毕'; statusEl.className = 'file-status downloaded'; }
+                    // 图片：发送方也显示预览
+                    if (isImage) {
+                        const msgEl = document.querySelector('[data-id="' + fileId + '"]');
+                        if (msgEl) addImagePreview(msgEl, fullDataUrl);
+                    }
+                }, 300);
+            };
+            reader.readAsDataURL(file);
         }
 
         // 接收文件块
@@ -511,59 +491,68 @@
 
         function receiveFile(data) {
             if (data.type === 'file') {
-                // 初始化文件接收
                 receivedFileChunks[data.fileId] = {
-                    name: data.name,
-                    size: data.size,
-                    expiry: data.expiry,
-                    chunks: [],
-                    totalChunks: data.totalChunks,
-                    received: 0
+                    name: data.name, size: data.size, expiry: data.expiry,
+                    mime: data.mime, isImage: data.isImage,
+                    chunks: [], totalChunks: data.totalChunks, received: 0
                 };
-
-                // 显示文件消息
                 showFileMessage(data, data.name, data.fileId, false);
             } else if (data.type === 'file-chunk') {
-                // 接收文件块
                 const fileId = data.fileId;
-                if (!receivedFileChunks[fileId]) {
-                    receivedFileChunks[fileId] = { chunks: [], totalChunks: data.totalChunks };
-                }
+                if (!receivedFileChunks[fileId]) return;
 
-                receivedFileChunks[fileId].chunks[data.chunkIndex] = data.data;
-                receivedFileChunks[fileId].received++;
+                const f = receivedFileChunks[fileId];
+                f.chunks[data.chunkIndex] = data.data;
+                f.received++;
 
-                // 更新进度
-                const progress = Math.round((receivedFileChunks[fileId].received / data.totalChunks) * 100);
+                const progress = Math.round((f.received / data.totalChunks) * 100);
                 const msgEl = document.querySelector('[data-file-id="' + fileId + '"]');
-                if (msgEl) {
-                    const statusEl = document.getElementById('status-' + fileId);
-                    statusEl.textContent = `接收中... ${progress}%`;
-                }
+                const statusEl = document.getElementById('status-' + fileId);
+                if (statusEl) statusEl.textContent = '接收中... ' + progress + '%';
 
-                // 检查是否接收完成
-                if (receivedFileChunks[fileId].received === data.totalChunks) {
-                    // 组装完整文件
-                    const fileData = receivedFileChunks[fileId];
-                    const blob = base64ToBlob(
-                        fileData.chunks.join(''),
-                        getMimeType(fileData.name)
-                    );
+                if (f.received === f.totalChunks) {
+                    // 拼回完整 dataURL
+                    const fullDataUrl = f.chunks.join('');
+                    const blob = dataURLToBlob(fullDataUrl);
 
-                    // 保存到全局变量供下载
-                    window['receivedFile_' + fileId] = {
-                        blob: blob,
-                        name: fileData.name
-                    };
+                    window['receivedFile_' + fileId] = { blob: blob, name: f.name, dataUrl: fullDataUrl, isImage: f.isImage };
 
-                    // 更新状态
-                    if (msgEl) {
-                        const statusEl = document.getElementById('status-' + fileId);
-                        statusEl.textContent = '已接收，可下载';
-                        statusEl.className = 'file-status downloaded';
+                    if (statusEl) { statusEl.textContent = '已接收，可下载'; statusEl.className = 'file-status downloaded'; }
+
+                    // 图片：显示内联预览
+                    if (f.isImage && msgEl) {
+                        addImagePreview(msgEl, fullDataUrl);
                     }
                 }
             }
+        }
+
+        // dataURL 转 Blob
+        function dataURLToBlob(dataURL) {
+            const parts = dataURL.split(',');
+            const mime = parts[0].match(/:(.*?);/)[1];
+            const bytes = atob(parts[1]);
+            const arr = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+            return new Blob([arr], { type: mime });
+        }
+
+        // 图片内联预览
+        function addImagePreview(msgEl, dataUrl) {
+            const existing = msgEl.querySelector('.file-preview-img');
+            if (existing) return;
+            const img = document.createElement('img');
+            img.className = 'file-preview-img';
+            img.src = dataUrl;
+            img.style.cssText = 'max-width:100%;max-height:220px;border-radius:10px;margin-top:8px;cursor:pointer;display:block;';
+            img.addEventListener('click', () => {
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+                overlay.innerHTML = '<img src="' + dataUrl + '" style="max-width:95%;max-height:95%;border-radius:10px;">';
+                overlay.addEventListener('click', () => overlay.remove());
+                document.body.appendChild(overlay);
+            });
+            msgEl.appendChild(img);
         }
 
         // 下载文件
@@ -611,36 +600,6 @@
 
             // 清理内存
             delete window['receivedFile_' + fileId];
-        }
-
-        // Base64转Blob
-        function base64ToBlob(base64, mimeType) {
-            const byteCharacters = atob(base64);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            return new Blob([byteArray], { type: mimeType });
-        }
-
-        // 获取MIME类型
-        function getMimeType(fileName) {
-            const ext = fileName.split('.').pop().toLowerCase();
-            const mimeTypes = {
-                'pdf': 'application/pdf',
-                'doc': 'application/msword',
-                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'txt': 'text/plain',
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'png': 'image/png',
-                'gif': 'image/gif',
-                'mp4': 'video/mp4',
-                'mp3': 'audio/mpeg',
-                'zip': 'application/zip'
-            };
-            return mimeTypes[ext] || 'application/octet-stream';
         }
 
         function showMessage(content, senderName, msgId, isSent) {
@@ -713,6 +672,7 @@
                 voiceRecorder.ondataavailable = e => { if (e.data.size > 0) voiceChunks.push(e.data); };
                 voiceRecorder.start();
                 isRecording = true;
+                voiceStartTime = Date.now();
                 document.getElementById('voiceBtn').classList.add('recording');
                 document.getElementById('voiceBtn').textContent = '⬤';
             } catch(e) {
@@ -743,7 +703,7 @@
             const reader = new FileReader();
             reader.onload = function() {
                 const msgId = crypto.randomUUID();
-                const duration = Math.round(blob.size / 3200); // 粗略估算时长
+                const duration = Math.max(1, Math.round((Date.now() - voiceStartTime) / 1000));
                 const voiceData = {
                     type: 'voice', id: msgId, name: userName,
                     data: reader.result, duration: Math.min(duration, 60),
