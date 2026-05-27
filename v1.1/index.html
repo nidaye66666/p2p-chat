@@ -186,20 +186,6 @@
         let isRecording = false;
         let voiceStartTime = 0;
 
-        // ICE 服务器配置（STUN 用于 P2P 穿透，TURN 用于移动网络对称 NAT 中继）
-        const ICE_CONFIG = {
-            iceServers: [
-                { urls: 'stun:stun.miwifi.com:3478' },
-                { urls: 'stun:stun.qq.com:3478' },
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-            ],
-            iceCandidatePoolSize: 2
-        };
-
         function toast(msg) {
             const c = document.getElementById('toastContainer');
             const t = document.createElement('div');
@@ -269,7 +255,7 @@
             showInviteSection();
             updateStatus('waiting', '等待连接...');
 
-            peer = new Peer('burnafter-' + currentInviteCode, { debug: 0, config: ICE_CONFIG });
+            peer = new Peer('burnafter-' + currentInviteCode, { debug: 0 });
 
             peer.on('connection', function(c) {
                 conn = c;
@@ -301,7 +287,7 @@
 
             updateStatus('waiting', '正在连接...');
 
-            peer = new Peer({ debug: 0, config: ICE_CONFIG });
+            peer = new Peer({ debug: 0 });
 
             peer.on('open', function(id) {
                 conn = peer.connect('burnafter-' + code);
