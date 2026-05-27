@@ -186,20 +186,6 @@
         let isRecording = false;
         let voiceStartTime = 0;
 
-        // ICE 服务器配置（STUN 用于 P2P 穿透，TURN 用于移动网络对称 NAT 中继）
-        const ICE_CONFIG = {
-            iceServers: [
-                { urls: 'stun:stun.miwifi.com:3478' },
-                { urls: 'stun:stun.qq.com:3478' },
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-            ],
-            iceCandidatePoolSize: 2
-        };
-
         function toast(msg) {
             const c = document.getElementById('toastContainer');
             const t = document.createElement('div');
@@ -262,23 +248,19 @@
             document.getElementById('displayBurnTime').textContent = burnTime;
             document.getElementById('userNameDisplay').textContent = userName;
 
-            isHost = true;
             currentInviteCode = generateCode();
             document.getElementById('inviteCode').textContent = currentInviteCode;
             document.getElementById('roomCodeDisplay').textContent = currentInviteCode;
 
             showInviteSection();
             updateStatus('waiting', '等待连接...');
-            startConnectionTimer();
 
-            peer = new Peer('burnafter-' + currentInviteCode, { debug: 0, config: ICE_CONFIG });
+            peer = new Peer('burnafter-' + currentInviteCode, { debug: 0 });
 
             peer.on('connection', function(c) {
                 conn = c;
                 isHost = true;
-                c.on('open', function() {
-                    setupConnection();
-                });
+                setupConnection();
             });
 
             peer.on('error', function(err) {
@@ -294,7 +276,6 @@
                 return;
             }
 
-            isHost = false;
             userName = document.getElementById('nameInput').value.trim() || '匿名';
             burnTime = parseInt(document.getElementById('burnTimeInput').value) || 8;
             if (burnTime < 3) burnTime = 3;
@@ -305,9 +286,8 @@
             document.getElementById('roomCodeDisplay').textContent = code;
 
             updateStatus('waiting', '正在连接...');
-            startConnectionTimer();
 
-            peer = new Peer({ debug: 0, config: ICE_CONFIG });
+            peer = new Peer({ debug: 0 });
 
             peer.on('open', function(id) {
                 conn = peer.connect('burnafter-' + code);
@@ -330,7 +310,6 @@
         }
 
         function setupConnection() {
-            stopConnectionTimer();
             updateStatus('connected', '已连接');
 
             document.getElementById('welcomeScreen').style.display = 'none';
@@ -856,88 +835,6 @@
             if (e.key === 'Enter') {
                 joinRoom();
             }
-        });
-
-        // ===== 连接超时计时器 =====
-        let connectionStartTime = 0;
-        let connectionTimer = null;
-
-        function startConnectionTimer() {
-            connectionStartTime = Date.now();
-            if (connectionTimer) clearInterval(connectionTimer);
-            connectionTimer = setInterval(() => {
-                const elapsed = Math.round((Date.now() - connectionStartTime) / 1000);
-                if (elapsed >= 60) {
-                    updateStatus('disconnected', '连接超时，请返回重试');
-                    clearInterval(connectionTimer);
-                    connectionTimer = null;
-                    if (peer && !peer.destroyed) { peer.destroy(); peer = null; }
-                } else if (elapsed >= 20) {
-                    updateStatus('waiting', '正在通过中继连接... 已等待 ' + elapsed + 's');
-                }
-            }, 3000);
-        }
-
-        function stopConnectionTimer() {
-            if (connectionTimer) { clearInterval(connectionTimer); connectionTimer = null; }
-        }
-
-        // ===== 页面切后台处理（防止 iOS Safari 挂起 WebSocket 导致崩溃） =====
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                // 切后台前：无活跃连接时主动销毁 peer
-                if (peer && !peer.destroyed && (!conn || !conn.open)) {
-                    stopConnectionTimer();
-                    peer.destroy();
-                    peer = null;
-                }
-            } else if (document.visibilityState === 'visible') {
-                // 回前台：peer 被销毁且还在等待连接，自动重建
-                if (!peer && currentInviteCode) {
-                    reconnectPeer();
-                }
-            }
-        });
-
-        function reconnectPeer() {
-            if (isHost) {
-                updateStatus('waiting', '重新等待连接...');
-                peer = new Peer('burnafter-' + currentInviteCode, { debug: 0, config: ICE_CONFIG });
-                peer.on('connection', function(c) {
-                    conn = c;
-                    isHost = true;
-                    c.on('open', function() { setupConnection(); });
-                });
-                peer.on('error', function(err) {
-                    toast('连接错误: ' + err.message);
-                    updateStatus('disconnected', '连接失败');
-                });
-            } else {
-                updateStatus('waiting', '重新连接中...');
-                peer = new Peer({ debug: 0, config: ICE_CONFIG });
-                peer.on('open', function(id) {
-                    conn = peer.connect('burnafter-' + currentInviteCode);
-                    conn.on('open', function() {
-                        isHost = false;
-                        setupConnection();
-                    });
-                    conn.on('error', function(err) {
-                        toast('连接失败: ' + err.message);
-                        updateStatus('disconnected', '连接失败');
-                    });
-                });
-                peer.on('error', function(err) {
-                    toast('Peer错误: ' + err.message);
-                    updateStatus('disconnected', '连接失败');
-                });
-            }
-            startConnectionTimer();
-        }
-
-        // ===== 窗口关闭前清理 =====
-        window.addEventListener('beforeunload', () => {
-            stopConnectionTimer();
-            if (peer && !peer.destroyed) peer.destroy();
         });
     </script>
 </body>
